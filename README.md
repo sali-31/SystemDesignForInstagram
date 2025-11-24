@@ -119,4 +119,7 @@ Trade-offs and alternatives (e.g., SQL vs NoSQL, consistency models) are discuss
 - **Security:**  
   - Authentication and authorization for all user actions  
   - HTTPS for all traffic  
-  - Role-based access for admin endpoints  
+  - Role-based access for admin endpoints
+  ---
+
+    Report in Progress: https://www.overleaf.com/read/kjgvkygpmhbp#586c0e

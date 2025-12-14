@@ -1,125 +1,47 @@
-# Instagram-Style Photo Sharing System – System Design
+# Designing Instagram — System Design (CISC 3140)
 
-System design project for an Instagram-like photo sharing platform completed for  
-**CISC 3140 – Design & Implementation of Large-Scale Applications, Brooklyn College**.
+This repository contains a **system design report** for an Instagram-like social media platform focused on **massive scale**, **low-latency user experience**, and **high availability + durability** for media content. :contentReference[oaicite:0]{index=0
 
-> This repository contains the architecture, data model, and design report for the system
-> (not a full production implementation).
+## What this design covers
 
----
+Instagram-style capabilities including:
+- Photo/video upload with transcoding, metadata, and efficient direct-to-object-storage uploads (pre-signed URLs). :contentReference[oaicite:1]{index=1}
+- Follow/unfollow, likes, comments, shares, and notifications. :contentReference[oaicite:2]{index=2}
+- Personalized infinite-scrolling feed with ranking + cursor pagination. :contentReference[oaicite:3]{index=3}
+- 24-hour Stories with edge caching (optional highlights). :contentReference[oaicite:4]{index=4}
+- Search & discovery using an index (e.g., Elasticsearch) + ML signals. :contentReference[oaicite:5]{index=5}
 
-## 1. Overview
+## Non-functional goals (targets)
 
-The goal of this project is to design a large-scale, Instagram-style application that allows users to:
+- **Latency:** p95 ~200ms for feed & primary UI interactions; fast media start via CDN + adaptive streaming. :contentReference[oaicite:6]{index=6}  
+- **Availability:** target 99.99% uptime with multi-AZ/region failover and clear RTO/backup policies. :contentReference[oaicite:7]{index=7}  
+- **Durability:** highly durable media storage with cross-region replication (object store). :contentReference[oaicite:8]{index=8}  
+- **Consistency model:** eventual consistency is acceptable for feeds/recommendations; strong consistency is required for auth (and other critical data). :contentReference[oaicite:9]{index=9}  
+- **Security & privacy:** TLS in transit, encryption at rest, least-privilege IAM, secret rotation, DSAR support. :contentReference[oaicite:10]{index=10}  
 
-- Create accounts and manage profiles  
-- Upload and view photos (and image captions)  
-- Follow other users and see a personalized news feed  
-- Like and comment on posts  
-- Receive notifications about relevant activity  
+## Architecture (high-level)
 
-The design focuses on **high availability**, **low latency**, and **horizontal scalability** for millions of users.
+The design selects a **microservices + event-driven** architecture (Kafka) to scale services independently and improve fault isolation. :contentReference[oaicite:11]{index=11}
 
----
+Core components:
+- **API Gateway:** token validation, rate limiting, routing, request shaping, versioning. :contentReference[oaicite:12]{index=12}  
+- **Auth Service:** login, token issuance/refresh, MFA, session management. :contentReference[oaicite:13]{index=13}  
+- **Read Services:** low-latency feed/profile/search using cache + timeline DB. :contentReference[oaicite:14]{index=14}  
+- **Write Services:** posts/likes/comments/follows; publish events to message bus. :contentReference[oaicite:15]{index=15}  
+- **Kafka Message Bus:** durable event stream for feed generation, notifications, analytics. :contentReference[oaicite:16]{index=16}  
+- **Timeline DB (Cassandra):** per-user feed entries optimized for appends/range scans. :contentReference[oaicite:17]{index=17}  
+- **Cache (Redis):** hot cache for feed fragments/sessions/top posts. :contentReference[oaicite:18]{index=18}  
+- **Media Processor:** transcoding, thumbnails, metadata extraction. :contentReference[oaicite:19]{index=19}  
+- **Blob Storage + CDN:** durable media storage + global edge delivery. :contentReference[oaicite:20]{index=20}  
+- **Monitoring/Observability:** metrics/tracing/logging + SLO dashboards. :contentReference[oaicite:21]{index=21}  
 
-## 2. Problem Statement
+## Data model (core entities)
 
-Design the backend architecture and data model for a global photo sharing platform that:
+Primary entities: **User, Post, Comment, Media, Story, Notification** and follow relationships. :contentReference[oaicite:22]{index=22}  
+Storage strategy uses a **hybrid model (SQL + NoSQL)**: SQL for structured interactions (User/Post/Comment), and NoSQL for high-volume evolving data (Stories/feeds). :contentReference[oaicite:23]{index=23}
 
-- Handles high read/write throughput (news feed, uploads, likes, comments)  
-- Minimizes feed latency for active users  
-- Supports large media storage and efficient content delivery  
-- Remains resilient to server failures and regional outages  
+## Communication & security notes
 
-The scope of this project is **system design**, not a full deployment.
-
----
-
-## 3. Core Features
-
-**User-facing**
-
-- User registration, login, and authentication  
-- User profiles (bio, avatar, follower / following counts)  
-- Photo upload with captions and timestamps  
-- Home feed (posts from followed users)  
-- Post interactions: likes, comments  
-- Notifications for follows, likes, and comments  
-- Basic search / discovery (user search, simple explore)
-
-**Admin / internal**
-
-- Basic moderation hooks for users and posts  
-- Metrics and logging for observability
-
----
-
-## 4. Non-Functional Requirements
-
-- **Availability:** Service remains up despite individual server failures.  
-- **Scalability:** Horizontal scaling to millions of daily active users.  
-- **Latency:** P95 feed load under X ms (course-level assumption).  
-- **Consistency:** Eventual consistency for feeds and counts is acceptable; strong consistency for auth and critical writes.  
-- **Security & Privacy:** Authentication, authorization, and encryption in transit.
-
----
-
-## 5. High-Level Architecture
-
-The design follows a **microservices** approach:
-
-- **API Gateway** – Single entry point for client requests, routing to internal services.  
-- **User Service** – Manages user accounts, profiles, and authentication.  
-- **Media Service** – Handles photo uploads, metadata, and integration with object storage/CDN.  
-- **Social Graph Service** – Stores and queries follower/following relationships.  
-- **Feed Service** – Generates and serves personalized news feeds (fan-out write / fan-out read hybrid).  
-- **Engagement Service** – Manages likes and comments.  
-- **Notification Service** – Sends in-app notifications for follows, likes, and comments.  
-- **Background Workers & Message Queue** – Asynchronous processing (feed fan-out, notification delivery, counter updates).  
-- **Cache Layer** – Redis or similar cache for hot feeds, user profiles, and counts.  
-- **Databases** – Combination of relational DB for strong-consistency data and NoSQL / key-value stores for high-volume items.  
-- **CDN & Object Storage** – Stores and delivers photos efficiently across regions.  
-
-Architecture and sequence diagrams are included in the `/diagrams` and `/docs` directories.
-
----
-
-## 6. Data Model Overview
-
-Key entities (simplified):
-
-- **User** – `user_id`, username, email, hashed_password, profile fields  
-- **Post** – `post_id`, `user_id`, caption, media_url, created_at  
-- **Follow** – follower_id, followee_id, created_at  
-- **Like** – user_id, post_id, created_at  
-- **Comment** – comment_id, post_id, user_id, text, created_at  
-- **Notification** – notification_id, user_id, type, actor_id, entity_id, created_at, read_flag  
-
-ER and schema diagrams are provided in the report.
-
----
-
-## 7. Key Design Decisions
-
-- **Microservices vs. Monolith:** Chose microservices to scale read-heavy components independently (feed, media) and enable clear service boundaries.  
-- **Feed Generation:** Hybrid fan-out model – precompute feeds for active users while using on-demand queries for cold users.  
-- **Storage:** Use relational DB for user/auth data; NoSQL / wide-column or key-value store for feeds, likes, and timelines.  
-- **Caching:** Cache user profiles, timelines, and counters to reduce DB load and speed up feed retrieval.  
-- **Messaging:** Introduced a message queue to decouple write paths (post creation) from expensive operations (fan-out, notifications).  
-
-Trade-offs and alternatives (e.g., SQL vs NoSQL, consistency models) are discussed in detail in the report.
-
----
-
-## 8. Scalability, Reliability & Security
-
-- **Scalability:** Horizontal scaling of stateless services behind load balancers; partitioned databases and sharded social graph.  
-- **Reliability:** Replication, health checks, and automatic failover for critical services; regular backups for persistent data.  
-- **Observability:** Centralized logging, metrics, and alerting for latency and error monitoring.  
-- **Security:**  
-  - Authentication and authorization for all user actions  
-  - HTTPS for all traffic  
-  - Role-based access for admin endpoints
-  ---
-
-    Report in Progress: https://www.overleaf.com/read/kjgvkygpmhbp#586c0e
+- **REST APIs** for core operations; JSON for requests/responses. :contentReference[oaicite:24]{index=24}  
+- **Push notifications** via APNs/FCM triggered from Kafka consumers. :contentReference[oaicite:25]{index=25}  
+- **Security:** HTTPS/TLS, JWT-based stateless sessions, Argon2/bcrypt-style hashing + salting, plus rate limiting/behavior checks.
